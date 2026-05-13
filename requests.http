@@ -1,0 +1,39 @@
+@baseUrl = http://localhost:8080
+@userId = 00000000-0000-0000-0000-000000000000
+
+### Liveness
+GET {{baseUrl}}/health/live
+
+### Readiness
+GET {{baseUrl}}/health/ready
+
+### Metrics
+GET {{baseUrl}}/metrics
+
+### Create user
+# Copy the returned `id` into @userId above, then run "Get user by ID".
+POST {{baseUrl}}/api/v1/users
+Content-Type: application/json
+
+{
+  "email": "alice@example.com",
+  "name": "Alice"
+}
+
+### List users
+GET {{baseUrl}}/api/v1/users?page=1&limit=20
+
+### Get user by ID
+GET {{baseUrl}}/api/v1/users/{{userId}}
+
+### Create user - validation error
+POST {{baseUrl}}/api/v1/users
+Content-Type: application/json
+
+{
+  "email": "not-an-email",
+  "name": ""
+}
+
+### Get user - invalid UUID
+GET {{baseUrl}}/api/v1/users/not-a-uuid
