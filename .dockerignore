@@ -1,0 +1,5 @@
+.git
+.air.toml
+tmp/
+data/
+build-errors.log
