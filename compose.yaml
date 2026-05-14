@@ -91,6 +91,7 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
       PYROSCOPE_SERVER_ADDRESS: http://pyroscope:4040
       DB_DSN: file:/data/app.db?_foreign_keys=on
+      DB_AUTO_MIGRATE: "true"
       REDIS_ADDR: redis:6379
       LOG_FORMAT: json
     depends_on:

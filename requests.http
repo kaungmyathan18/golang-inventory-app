@@ -1,5 +1,5 @@
 @baseUrl = http://localhost:8080
-@userId = 00000000-0000-0000-0000-000000000000
+@userId = 4e9f27a9-b7fb-4cdd-ac47-8e55f293d963
 
 ### Liveness
 GET {{baseUrl}}/health/live

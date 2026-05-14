@@ -6,9 +6,9 @@ import (
 	"strconv"
 
 	"github.com/kaungmyathan18/golang-inventory-app/internal/apiresponse"
+	"github.com/kaungmyathan18/golang-inventory-app/internal/observability"
 	"github.com/kaungmyathan18/golang-inventory-app/internal/repository"
 	"github.com/kaungmyathan18/golang-inventory-app/internal/service"
-	"github.com/kaungmyathan18/golang-inventory-app/internal/observability"
 	"github.com/kaungmyathan18/golang-inventory-app/internal/validation"
 
 	"github.com/go-chi/chi/v5"
@@ -47,7 +47,7 @@ func (h *APIHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 			)
 			return
 		}
-		h.log.Warn("create user", zap.Error(err))
+		h.log.Error("create user", zap.Error(err))
 		apiresponse.WriteInternalError(w, r, err)
 		return
 	}
