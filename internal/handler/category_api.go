@@ -33,7 +33,7 @@ func (h *CategoryAPIHandler) CreateCategory(w http.ResponseWriter, r *http.Reque
 	}
 	c, err := h.svc.CreateCategory(r.Context(), req.Name)
 	if err != nil {
-		validation.WriteError(w, r, err)
+		apiresponse.WriteInternalError(w, r, err)
 		return
 	}
 	apiresponse.WriteJSON(w, r, http.StatusCreated, c, nil, nil)
@@ -47,7 +47,7 @@ func (h *CategoryAPIHandler) GetCategory(w http.ResponseWriter, r *http.Request)
 	}
 	c, err := h.svc.GetCategory(r.Context(), id)
 	if err != nil {
-		validation.WriteError(w, r, err)
+		writeResourceError(w, r, err, "category")
 		return
 	}
 	apiresponse.WriteJSON(w, r, http.StatusOK, c, nil, nil)
@@ -63,13 +63,21 @@ func (h *CategoryAPIHandler) ListCategories(w http.ResponseWriter, r *http.Reque
 		validation.WriteError(w, r, err)
 		return
 	}
-	categories, err := h.svc.ListCategories(r.Context())
+	categories, total, err := h.svc.ListCategoriesPaged(r.Context(), page, limit)
 	if err != nil {
-		validation.WriteError(w, r, err)
+		apiresponse.WriteInternalError(w, r, err)
 		return
 	}
-	links := apiresponse.PageLinks(r, page, limit, len(categories) == limit)
-	apiresponse.WriteJSON(w, r, http.StatusOK, categories, nil, links)
+	offset := (page - 1) * limit
+	hasMore := int64(offset+len(categories)) < total
+	pagination := &apiresponse.PaginationMeta{
+		Page:    page,
+		Limit:   limit,
+		Total:   total,
+		HasMore: hasMore,
+	}
+	links := apiresponse.PageLinks(r, page, limit, hasMore)
+	apiresponse.WriteJSON(w, r, http.StatusOK, categories, pagination, links)
 }
 
 func (h *CategoryAPIHandler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
@@ -85,7 +93,7 @@ func (h *CategoryAPIHandler) UpdateCategory(w http.ResponseWriter, r *http.Reque
 	}
 	c, err := h.svc.UpdateCategory(r.Context(), id, req.Name)
 	if err != nil {
-		validation.WriteError(w, r, err)
+		writeResourceError(w, r, err, "category")
 		return
 	}
 	apiresponse.WriteJSON(w, r, http.StatusOK, c, nil, nil)
@@ -99,7 +107,7 @@ func (h *CategoryAPIHandler) DeleteCategory(w http.ResponseWriter, r *http.Reque
 	}
 	err := h.svc.DeleteCategory(r.Context(), id)
 	if err != nil {
-		validation.WriteError(w, r, err)
+		writeResourceError(w, r, err, "category")
 		return
 	}
 	apiresponse.WriteJSON(w, r, http.StatusOK, nil, nil, nil)

@@ -2,6 +2,7 @@ package apiresponse
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -9,13 +10,13 @@ import (
 
 // Problem follows RFC 7807 Problem Details (application/problem+json).
 type Problem struct {
-	Type       string         `json:"type"`
-	Title      string         `json:"title"`
-	Status     int            `json:"status"`
-	Detail     string         `json:"detail,omitempty"`
-	Instance   string         `json:"instance"`
-	RequestID  string         `json:"request_id,omitempty"`
-	Errors     []FieldProblem `json:"errors,omitempty"`
+	Type      string         `json:"type"`
+	Title     string         `json:"title"`
+	Status    int            `json:"status"`
+	Detail    string         `json:"detail,omitempty"`
+	Instance  string         `json:"instance"`
+	RequestID string         `json:"request_id,omitempty"`
+	Errors    []FieldProblem `json:"errors,omitempty"`
 }
 
 // FieldProblem is an extension field for validation issues.
@@ -118,7 +119,9 @@ func absoluteURL(r *http.Request, u *url.URL) string {
 
 // WriteInternalError sends a generic 500 problem without leaking err to clients.
 func WriteInternalError(w http.ResponseWriter, r *http.Request, logReason error) {
-	_ = logReason
+	if logReason != nil {
+		log.Printf("internal error: method=%s path=%s request_id=%s error=%v", r.Method, r.URL.Path, RequestID(r), logReason)
+	}
 	WriteProblem(w, r, http.StatusInternalServerError,
 		ProblemTypeURI(r, "internal-error"),
 		"Internal Server Error",

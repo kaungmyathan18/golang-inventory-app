@@ -105,8 +105,6 @@ services:
         condition: service_started
       otel-collector:
         condition: service_started
-      grafana:
-        condition: service_started
 
     volumes:
       - sqlite-data:/data

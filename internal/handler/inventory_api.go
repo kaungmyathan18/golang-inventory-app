@@ -6,7 +6,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/kaungmyathan18/golang-inventory-app/internal/apiresponse"
 	"github.com/kaungmyathan18/golang-inventory-app/internal/observability"
-	"github.com/kaungmyathan18/golang-inventory-app/internal/repository"
 	"github.com/kaungmyathan18/golang-inventory-app/internal/service"
 	"github.com/kaungmyathan18/golang-inventory-app/internal/validation"
 	"go.uber.org/zap"
@@ -14,13 +13,12 @@ import (
 
 type InventoryAPIHandler struct {
 	svc     *service.InventoryService
-	repo    *repository.ProductRepository
 	log     *zap.Logger
 	metrics *observability.Metrics
 }
 
-func NewInventoryAPIHandler(svc *service.InventoryService, log *zap.Logger, m *observability.Metrics, repo *repository.ProductRepository) *InventoryAPIHandler {
-	return &InventoryAPIHandler{svc: svc, repo: repo, log: log, metrics: m}
+func NewInventoryAPIHandler(svc *service.InventoryService, log *zap.Logger, m *observability.Metrics) *InventoryAPIHandler {
+	return &InventoryAPIHandler{svc: svc, log: log, metrics: m}
 }
 
 type createInventoryReq struct {
@@ -36,11 +34,10 @@ func (h *InventoryAPIHandler) CreateInventory(w http.ResponseWriter, r *http.Req
 	}
 	i, err := h.svc.CreateInventory(r.Context(), req.ProductID, req.Quantity)
 	if err != nil {
-		validation.WriteError(w, r, err)
+		apiresponse.WriteInternalError(w, r, err)
 		return
 	}
 	apiresponse.WriteJSON(w, r, http.StatusCreated, i, nil, nil)
-	return
 }
 
 func (h *InventoryAPIHandler) GetInventory(w http.ResponseWriter, r *http.Request) {
@@ -51,11 +48,10 @@ func (h *InventoryAPIHandler) GetInventory(w http.ResponseWriter, r *http.Reques
 	}
 	i, err := h.svc.GetInventory(r.Context(), id)
 	if err != nil {
-		validation.WriteError(w, r, err)
+		writeResourceError(w, r, err, "inventory")
 		return
 	}
 	apiresponse.WriteJSON(w, r, http.StatusOK, i, nil, nil)
-	return
 }
 
 func (h *InventoryAPIHandler) ListInventories(w http.ResponseWriter, r *http.Request) {
@@ -70,7 +66,7 @@ func (h *InventoryAPIHandler) ListInventories(w http.ResponseWriter, r *http.Req
 	}
 	inventories, total, err := h.svc.ListInventoriesPaged(r.Context(), page, limit)
 	if err != nil {
-		validation.WriteError(w, r, err)
+		apiresponse.WriteInternalError(w, r, err)
 		return
 	}
 	offset := (page - 1) * limit
@@ -81,9 +77,8 @@ func (h *InventoryAPIHandler) ListInventories(w http.ResponseWriter, r *http.Req
 		Total:   total,
 		HasMore: hasMore,
 	}
-	links := apiresponse.PageLinks(r, page, limit, len(inventories) == limit)
+	links := apiresponse.PageLinks(r, page, limit, hasMore)
 	apiresponse.WriteJSON(w, r, http.StatusOK, inventories, pagination, links)
-	return
 }
 
 func (h *InventoryAPIHandler) UpdateInventory(w http.ResponseWriter, r *http.Request) {
@@ -92,51 +87,17 @@ func (h *InventoryAPIHandler) UpdateInventory(w http.ResponseWriter, r *http.Req
 		validation.WriteError(w, r, err)
 		return
 	}
-	i, err := h.svc.GetInventory(r.Context(), id)
-	if err != nil {
-		validation.WriteError(w, r, err)
-		return
-	}
-	if i == nil {
-		apiresponse.WriteProblem(w, r, http.StatusNotFound,
-			apiresponse.ProblemTypeURI(r, "not-found"),
-			"Not Found",
-			"No inventory exists for the given id.",
-			nil,
-		)
-		return
-	}
-	if i.ProductID == "" {
-		apiresponse.WriteProblem(w, r, http.StatusNotFound,
-			apiresponse.ProblemTypeURI(r, "not-found"),
-			"Not Found",
-			"No product exists for the given inventory id.",
-			nil,
-		)
-		return
-	}
-	_, err = h.repo.Get(r.Context(), i.ProductID)
-	if err != nil {
-		apiresponse.WriteProblem(w, r, http.StatusNotFound,
-			apiresponse.ProblemTypeURI(r, "not-found"),
-			"Not Found",
-			"No product exists for the given inventory id.",
-			nil,
-		)
-		return
-	}
 	var req updateInventoryReq
 	if err := validation.DecodeJSON(r, &req); err != nil {
 		validation.WriteError(w, r, err)
 		return
 	}
-	i, err = h.svc.UpdateInventory(r.Context(), id, req.ProductID, req.Quantity)
+	i, err := h.svc.UpdateInventory(r.Context(), id, req.ProductID, req.Quantity)
 	if err != nil {
-		validation.WriteError(w, r, err)
+		writeResourceError(w, r, err, "inventory")
 		return
 	}
 	apiresponse.WriteJSON(w, r, http.StatusOK, i, nil, nil)
-	return
 }
 
 type updateInventoryReq struct {
@@ -152,9 +113,8 @@ func (h *InventoryAPIHandler) DeleteInventory(w http.ResponseWriter, r *http.Req
 	}
 	err := h.svc.DeleteInventory(r.Context(), id)
 	if err != nil {
-		validation.WriteError(w, r, err)
+		writeResourceError(w, r, err, "inventory")
 		return
 	}
 	apiresponse.WriteJSON(w, r, http.StatusOK, nil, nil, nil)
-	return
 }

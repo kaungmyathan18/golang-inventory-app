@@ -3,17 +3,17 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"github.com/kaungmyathan18/golang-inventory-app/internal/cache"
+	"github.com/kaungmyathan18/golang-inventory-app/internal/database"
 	"net/http"
 	"time"
-	"github.com/kaungmyathan18/golang-inventory-app/internal/database"
-	"github.com/kaungmyathan18/golang-inventory-app/internal/cache"
 
 	"go.uber.org/zap"
 )
 
 type HealthHandler struct {
-	log *zap.Logger
-	db *database.DB
+	log   *zap.Logger
+	db    *database.DB
 	cache *cache.Client
 }
 
@@ -23,8 +23,8 @@ func NewHealthHandler(
 	c *cache.Client,
 ) *HealthHandler {
 	return &HealthHandler{
-		log: log,
-		db: db,
+		log:   log,
+		db:    db,
 		cache: c,
 	}
 }
@@ -52,7 +52,6 @@ func (h *HealthHandler) Ready(w http.ResponseWriter, r *http.Request) {
 			checks["cache"] = "healthy"
 		}
 	}
-	_ = checkCtx
 
 	status := http.StatusOK
 	for _, v := range checks {

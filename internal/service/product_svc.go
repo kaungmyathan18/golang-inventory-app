@@ -83,8 +83,15 @@ func NewCategoryService(
 		metrics: m,
 	}
 }
-func (s *CategoryService) ListCategories(ctx context.Context) ([]repository.Category, error) {
-	return s.repo.List(ctx)
+func (s *CategoryService) ListCategoriesPaged(ctx context.Context, page, limit int) ([]repository.Category, int64, error) {
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 20
+	}
+	offset := (page - 1) * limit
+	return s.repo.ListPaged(ctx, offset, limit)
 }
 
 func (s *CategoryService) GetCategory(ctx context.Context, id string) (*repository.Category, error) {

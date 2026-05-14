@@ -38,6 +38,10 @@ func (h *ProductAPIHandler) CreateProduct(w http.ResponseWriter, r *http.Request
 	}
 	p, err := h.svc.CreateProduct(r.Context(), req.Name, req.Description, req.Price, req.CategoryID)
 	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			writeMissingRelation(w, r, "category")
+			return
+		}
 		apiresponse.WriteInternalError(w, r, err)
 		return
 	}
@@ -52,16 +56,7 @@ func (h *ProductAPIHandler) GetProduct(w http.ResponseWriter, r *http.Request) {
 	}
 	p, err := h.svc.GetProduct(r.Context(), id)
 	if err != nil {
-		if errors.Is(err, repository.ErrNotFound) {
-			apiresponse.WriteProblem(w, r, http.StatusNotFound,
-				apiresponse.ProblemTypeURI(r, "not-found"),
-				"Not Found",
-				"No product exists for the given id.",
-				nil,
-			)
-			return
-		}
-		apiresponse.WriteInternalError(w, r, err)
+		writeResourceError(w, r, err, "product")
 		return
 	}
 	apiresponse.WriteJSON(w, r, http.StatusOK, p, nil, nil)
@@ -107,7 +102,11 @@ func (h *ProductAPIHandler) UpdateProduct(w http.ResponseWriter, r *http.Request
 	}
 	p, err := h.svc.UpdateProduct(r.Context(), id, req.Name, req.Description, req.Price, req.CategoryID)
 	if err != nil {
-		validation.WriteError(w, r, err)
+		if errors.Is(err, repository.ErrNotFound) {
+			writeResourceError(w, r, err, "product")
+			return
+		}
+		apiresponse.WriteInternalError(w, r, err)
 		return
 	}
 	apiresponse.WriteJSON(w, r, http.StatusOK, p, nil, nil)
@@ -121,7 +120,7 @@ func (h *ProductAPIHandler) DeleteProduct(w http.ResponseWriter, r *http.Request
 	}
 	err := h.svc.DeleteProduct(r.Context(), id)
 	if err != nil {
-		validation.WriteError(w, r, err)
+		writeResourceError(w, r, err, "product")
 		return
 	}
 	apiresponse.WriteJSON(w, r, http.StatusOK, nil, nil, nil)

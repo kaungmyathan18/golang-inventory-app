@@ -82,17 +82,17 @@ func main() {
 	repo := repository.NewUserRepository(db, logger)
 	svc := service.NewUserService(repo, logger, metrics)
 
-	productRepo := repository.NewProductRepository(db, logger)
-	productSvc := service.NewProductService(productRepo, logger, metrics)
-	productAPIHandler := handler.NewProductAPIHandler(productSvc, logger, metrics)
-
 	categoryRepo := repository.NewCategoryRepository(db, logger)
 	categorySvc := service.NewCategoryService(categoryRepo, logger, metrics)
 	categoryAPIHandler := handler.NewCategoryAPIHandler(categorySvc, logger, metrics)
 
+	productRepo := repository.NewProductRepository(db, logger, categoryRepo)
+	productSvc := service.NewProductService(productRepo, logger, metrics)
+	productAPIHandler := handler.NewProductAPIHandler(productSvc, logger, metrics)
+
 	inventoryRepo := repository.NewInventoryRepository(db, logger)
 	inventorySvc := service.NewInventoryService(inventoryRepo, logger, metrics)
-	inventoryAPIHandler := handler.NewInventoryAPIHandler(inventorySvc, logger, metrics, productRepo)
+	inventoryAPIHandler := handler.NewInventoryAPIHandler(inventorySvc, logger, metrics)
 
 	health := handler.NewHealthHandler(
 		logger,

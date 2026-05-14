@@ -20,21 +20,20 @@ type Product struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 type ProductRepository struct {
-	db  *sql.DB
-	log *zap.Logger
+	db           *sql.DB
+	log          *zap.Logger
+	categoryRepo *CategoryRepository
 }
 
-func NewProductRepository(db *database.DB, log *zap.Logger) *ProductRepository {
-	return &ProductRepository{db: db.SQL, log: log}
+func NewProductRepository(db *database.DB, log *zap.Logger, categoryRepo *CategoryRepository) *ProductRepository {
+	return &ProductRepository{db: db.SQL, log: log, categoryRepo: categoryRepo}
 }
 
 func (r *ProductRepository) Create(ctx context.Context, name, description string, price float64, categoryID string) (*Product, error) {
-	category, err := NewCategoryRepository(&database.DB{SQL: r.db}, r.log).Get(ctx, categoryID)
-	if err != nil {
-		return nil, err
-	}
-	if category == nil {
-		return nil, errors.New("category not found")
+	if r.categoryRepo != nil {
+		if _, err := r.categoryRepo.Get(ctx, categoryID); err != nil {
+			return nil, err
+		}
 	}
 	product := Product{
 		ID:          uuid.NewString(),
@@ -44,7 +43,7 @@ func (r *ProductRepository) Create(ctx context.Context, name, description string
 		CategoryID:  categoryID,
 		CreatedAt:   time.Now().UTC(),
 	}
-	_, err = r.db.ExecContext(ctx,
+	_, err := r.db.ExecContext(ctx,
 		`INSERT INTO products (id, name, description, price, category_id, created_at) VALUES (?,?,?,?,?,?)`,
 		product.ID, product.Name, product.Description, product.Price, product.CategoryID, product.CreatedAt.Format(time.RFC3339Nano),
 	)
@@ -61,6 +60,9 @@ func (r *ProductRepository) Get(ctx context.Context, id string) (*Product, error
 		`SELECT id, name, description, price, category_id, created_at FROM products WHERE id = ?`, id,
 	).Scan(&product.ID, &product.Name, &product.Description, &product.Price, &product.CategoryID, &createdAt)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
 		return nil, err
 	}
 	product.CreatedAt, err = parseCreatedAt(createdAt)
@@ -96,7 +98,7 @@ func (r *ProductRepository) ListPaged(ctx context.Context, offset, limit int) ([
 		}
 		products = append(products, product)
 	}
-	return products, total, nil
+	return products, total, rows.Err()
 }
 
 func (r *ProductRepository) Update(ctx context.Context, id string, name, description string, price float64, categoryID string) (*Product, error) {
@@ -107,20 +109,26 @@ func (r *ProductRepository) Update(ctx context.Context, id string, name, descrip
 		Price:       price,
 		CategoryID:  categoryID,
 	}
-	_, err := r.db.ExecContext(ctx,
+	result, err := r.db.ExecContext(ctx,
 		`UPDATE products SET name = ?, description = ?, price = ?, category_id = ? WHERE id = ?`,
 		product.Name, product.Description, product.Price, product.CategoryID, product.ID,
 	)
 	if err != nil {
 		return nil, err
 	}
+	if affected, err := result.RowsAffected(); err == nil && affected == 0 {
+		return nil, ErrNotFound
+	}
 	return &product, nil
 }
 
 func (r *ProductRepository) Delete(ctx context.Context, id string) error {
-	_, err := r.db.ExecContext(ctx, `DELETE FROM products WHERE id = ?`, id)
+	result, err := r.db.ExecContext(ctx, `DELETE FROM products WHERE id = ?`, id)
 	if err != nil {
 		return err
+	}
+	if affected, err := result.RowsAffected(); err == nil && affected == 0 {
+		return ErrNotFound
 	}
 	return nil
 }
@@ -140,26 +148,46 @@ func NewCategoryRepository(db *database.DB, log *zap.Logger) *CategoryRepository
 	return &CategoryRepository{db: db.SQL, log: log}
 }
 
-func (r *CategoryRepository) List(ctx context.Context) ([]Category, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT id, name FROM categories`)
+func (r *CategoryRepository) ListPaged(ctx context.Context, offset, limit int) ([]Category, int64, error) {
+	var total int64
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM categories`).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, name, created_at FROM categories ORDER BY created_at ASC LIMIT ? OFFSET ?`,
+		limit, offset,
+	)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 	var categories []Category
 	for rows.Next() {
+		var createdAt string
 		var category Category
-		if err := rows.Scan(&category.ID, &category.Name); err != nil {
-			return nil, err
+		if err := rows.Scan(&category.ID, &category.Name, &createdAt); err != nil {
+			return nil, 0, err
+		}
+		category.CreatedAt, err = parseCreatedAt(createdAt)
+		if err != nil {
+			return nil, 0, err
 		}
 		categories = append(categories, category)
 	}
-	return categories, nil
+	return categories, total, rows.Err()
 }
 
 func (r *CategoryRepository) Get(ctx context.Context, id string) (*Category, error) {
+	var createdAt string
 	category := Category{}
-	err := r.db.QueryRowContext(ctx, `SELECT id, name FROM categories WHERE id = ?`, id).Scan(&category.ID, &category.Name)
+	err := r.db.QueryRowContext(ctx, `SELECT id, name, created_at FROM categories WHERE id = ?`, id).Scan(&category.ID, &category.Name, &createdAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	category.CreatedAt, err = parseCreatedAt(createdAt)
 	if err != nil {
 		return nil, err
 	}
@@ -184,17 +212,23 @@ func (r *CategoryRepository) Update(ctx context.Context, id string, name string)
 		ID:   id,
 		Name: name,
 	}
-	_, err := r.db.ExecContext(ctx, `UPDATE categories SET name = ? WHERE id = ?`, category.Name, category.ID)
+	result, err := r.db.ExecContext(ctx, `UPDATE categories SET name = ? WHERE id = ?`, category.Name, category.ID)
 	if err != nil {
 		return nil, err
+	}
+	if affected, err := result.RowsAffected(); err == nil && affected == 0 {
+		return nil, ErrNotFound
 	}
 	return &category, nil
 }
 
 func (r *CategoryRepository) Delete(ctx context.Context, id string) error {
-	_, err := r.db.ExecContext(ctx, `DELETE FROM categories WHERE id = ?`, id)
+	result, err := r.db.ExecContext(ctx, `DELETE FROM categories WHERE id = ?`, id)
 	if err != nil {
 		return err
+	}
+	if affected, err := result.RowsAffected(); err == nil && affected == 0 {
+		return ErrNotFound
 	}
 	return nil
 }
@@ -234,6 +268,9 @@ func (r *InventoryRepository) Get(ctx context.Context, id string) (*Inventory, e
 	inventory := Inventory{}
 	err := r.db.QueryRowContext(ctx, `SELECT id, product_id, quantity, created_at FROM inventory WHERE id = ?`, id).Scan(&inventory.ID, &inventory.ProductID, &inventory.Quantity, &createdAt)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
 		return nil, err
 	}
 	inventory.CreatedAt, err = parseCreatedAt(createdAt)
@@ -269,7 +306,7 @@ func (r *InventoryRepository) ListPaged(ctx context.Context, offset, limit int) 
 		}
 		inventories = append(inventories, inventory)
 	}
-	return inventories, total, nil
+	return inventories, total, rows.Err()
 }
 
 func (r *InventoryRepository) Update(ctx context.Context, id string, productID string, quantity int) (*Inventory, error) {
@@ -278,17 +315,23 @@ func (r *InventoryRepository) Update(ctx context.Context, id string, productID s
 		ProductID: productID,
 		Quantity:  quantity,
 	}
-	_, err := r.db.ExecContext(ctx, `UPDATE inventory SET product_id = ?, quantity = ? WHERE id = ?`, inventory.ProductID, inventory.Quantity, inventory.ID)
+	result, err := r.db.ExecContext(ctx, `UPDATE inventory SET product_id = ?, quantity = ? WHERE id = ?`, inventory.ProductID, inventory.Quantity, inventory.ID)
 	if err != nil {
 		return nil, err
+	}
+	if affected, err := result.RowsAffected(); err == nil && affected == 0 {
+		return nil, ErrNotFound
 	}
 	return &inventory, nil
 }
 
 func (r *InventoryRepository) Delete(ctx context.Context, id string) error {
-	_, err := r.db.ExecContext(ctx, `DELETE FROM inventory WHERE id = ?`, id)
+	result, err := r.db.ExecContext(ctx, `DELETE FROM inventory WHERE id = ?`, id)
 	if err != nil {
 		return err
+	}
+	if affected, err := result.RowsAffected(); err == nil && affected == 0 {
+		return ErrNotFound
 	}
 	return nil
 }
