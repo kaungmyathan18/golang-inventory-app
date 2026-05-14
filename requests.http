@@ -1,5 +1,8 @@
 @baseUrl = http://localhost:8080
 @userId = 4e9f27a9-b7fb-4cdd-ac47-8e55f293d963
+@categoryId = 4d1a5b6e-f0fd-4a3c-837c-3a508a933372
+@productId = 04b4aca1-96ef-4df0-82ed-64e9cc74e5cf
+@inventoryId = 00000000-0000-0000-0000-000000000000
 
 ### Liveness
 GET {{baseUrl}}/health/live
@@ -37,3 +40,119 @@ Content-Type: application/json
 
 ### Get user - invalid UUID
 GET {{baseUrl}}/api/v1/users/not-a-uuid
+
+### Create category
+# Copy the returned `id` into @categoryId above before creating a product.
+POST {{baseUrl}}/api/v1/categories/
+Content-Type: application/json
+
+{
+  "name": "Electronics"
+}
+
+### List categories
+GET {{baseUrl}}/api/v1/categories/?page=1&limit=20
+
+### Get category by ID
+GET {{baseUrl}}/api/v1/categories/{{categoryId}}
+
+### Update category
+PUT {{baseUrl}}/api/v1/categories/{{categoryId}}
+Content-Type: application/json
+
+{
+  "name": "Consumer Electronics"
+}
+
+### Delete category
+DELETE {{baseUrl}}/api/v1/categories/{{categoryId}}
+
+### Create category - validation error
+POST {{baseUrl}}/api/v1/categories/
+Content-Type: application/json
+
+{
+  "name": ""
+}
+
+### Create product
+# Requires @categoryId to be set to an existing category id.
+# Copy the returned `id` into @productId above before creating inventory.
+POST {{baseUrl}}/api/v1/products/
+Content-Type: application/json
+
+{
+  "name": "Wireless Mouse",
+  "description": "Ergonomic wireless mouse",
+  "price": 29.99,
+  "category_id": "{{categoryId}}"
+}
+
+### List products
+GET {{baseUrl}}/api/v1/products/?page=1&limit=20
+
+### Get product by ID
+GET {{baseUrl}}/api/v1/products/{{productId}}
+
+### Update product
+PUT {{baseUrl}}/api/v1/products/{{productId}}
+Content-Type: application/json
+
+{
+  "name": "Wireless Mouse Pro",
+  "description": "Ergonomic wireless mouse with silent clicks",
+  "price": 39.99,
+  "category_id": "{{categoryId}}"
+}
+
+### Delete product
+DELETE {{baseUrl}}/api/v1/products/{{productId}}
+
+### Create product - validation error
+POST {{baseUrl}}/api/v1/products/
+Content-Type: application/json
+
+{
+  "name": "",
+  "description": "",
+  "price": -1,
+  "category_id": "not-a-uuid"
+}
+
+### Create inventory
+# Requires @productId to be set to an existing product id.
+# Copy the returned `id` into @inventoryId above.
+POST {{baseUrl}}/api/v1/inventories/
+Content-Type: application/json
+
+{
+  "product_id": "{{productId}}",
+  "quantity": 25
+}
+
+### List inventories
+GET {{baseUrl}}/api/v1/inventories/?page=1&limit=20
+
+### Get inventory by ID
+GET {{baseUrl}}/api/v1/inventories/{{inventoryId}}
+
+### Update inventory
+PUT {{baseUrl}}/api/v1/inventories/{{inventoryId}}
+Content-Type: application/json
+
+{
+  "product_id": "{{productId}}",
+  "quantity": 50
+}
+
+### Delete inventory
+DELETE {{baseUrl}}/api/v1/inventories/{{inventoryId}}
+
+### Create inventory - validation error
+POST {{baseUrl}}/api/v1/inventories/
+Content-Type: application/json
+
+{
+  "product_id": "not-a-uuid",
+  "quantity": -1
+}

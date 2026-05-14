@@ -82,6 +82,18 @@ func main() {
 	repo := repository.NewUserRepository(db, logger)
 	svc := service.NewUserService(repo, logger, metrics)
 
+	productRepo := repository.NewProductRepository(db, logger)
+	productSvc := service.NewProductService(productRepo, logger, metrics)
+	productAPIHandler := handler.NewProductAPIHandler(productSvc, logger, metrics)
+
+	categoryRepo := repository.NewCategoryRepository(db, logger)
+	categorySvc := service.NewCategoryService(categoryRepo, logger, metrics)
+	categoryAPIHandler := handler.NewCategoryAPIHandler(categorySvc, logger, metrics)
+
+	inventoryRepo := repository.NewInventoryRepository(db, logger)
+	inventorySvc := service.NewInventoryService(inventoryRepo, logger, metrics)
+	inventoryAPIHandler := handler.NewInventoryAPIHandler(inventorySvc, logger, metrics, productRepo)
+
 	health := handler.NewHealthHandler(
 		logger,
 		db,
@@ -89,7 +101,7 @@ func main() {
 	)
 	api := handler.NewAPIHandler(svc, logger, metrics)
 
-	router := setupRouter(cfg, logger, metrics, health, api)
+	router := setupRouter(cfg, logger, metrics, health, api, productAPIHandler, categoryAPIHandler, inventoryAPIHandler)
 	// Tune ReadTimeout/WriteTimeout if you add long-lived WebSocket handlers without a separate /api/v1 route group.
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Server.Port),
@@ -127,6 +139,9 @@ func setupRouter(
 	metrics *observability.Metrics,
 	health *handler.HealthHandler,
 	api *handler.APIHandler,
+	productAPIHandler *handler.ProductAPIHandler,
+	categoryAPIHandler *handler.CategoryAPIHandler,
+	inventoryAPIHandler *handler.InventoryAPIHandler,
 ) *chi.Mux {
 	r := chi.NewRouter()
 	r.Use(middleware.RealIP)
@@ -158,6 +173,30 @@ func setupRouter(
 		ar.Post("/users", api.CreateUser)
 		ar.Get("/users/{id}", api.GetUser)
 		ar.Get("/users", api.ListUsers)
+
+		ar.Route("/products", func(pr chi.Router) {
+			pr.Post("/", productAPIHandler.CreateProduct)
+			pr.Get("/{id}", productAPIHandler.GetProduct)
+			pr.Get("/", productAPIHandler.ListProducts)
+			pr.Put("/{id}", productAPIHandler.UpdateProduct)
+			pr.Delete("/{id}", productAPIHandler.DeleteProduct)
+		})
+
+		ar.Route("/categories", func(cr chi.Router) {
+			cr.Post("/", categoryAPIHandler.CreateCategory)
+			cr.Get("/{id}", categoryAPIHandler.GetCategory)
+			cr.Get("/", categoryAPIHandler.ListCategories)
+			cr.Put("/{id}", categoryAPIHandler.UpdateCategory)
+			cr.Delete("/{id}", categoryAPIHandler.DeleteCategory)
+		})
+
+		ar.Route("/inventories", func(ir chi.Router) {
+			ir.Post("/", inventoryAPIHandler.CreateInventory)
+			ir.Get("/{id}", inventoryAPIHandler.GetInventory)
+			ir.Get("/", inventoryAPIHandler.ListInventories)
+			ir.Put("/{id}", inventoryAPIHandler.UpdateInventory)
+			ir.Delete("/{id}", inventoryAPIHandler.DeleteInventory)
+		})
 	})
 	return r
 }
