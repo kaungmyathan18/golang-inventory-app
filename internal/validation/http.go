@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
@@ -56,7 +57,7 @@ func WriteError(w http.ResponseWriter, r *http.Request, err error) {
 
 	var syn *json.SyntaxError
 	var ut *json.UnmarshalTypeError
-	if errors.As(err, &syn) || errors.As(err, &ut) {
+	if errors.As(err, &syn) || errors.As(err, &ut) || errors.Is(err, io.ErrUnexpectedEOF) {
 		apiresponse.WriteProblem(w, r, http.StatusBadRequest,
 			apiresponse.ProblemTypeURI(r, "invalid-json"),
 			"Invalid JSON",
